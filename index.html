@@ -5,27 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Modern Gas Law Solver</title>
     
-    <!-- Tailwind CSS for Modern Styling -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Nerdamer for Symbolic Math Solving -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/nerdamer/1.1.13/nerdamer.core.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/nerdamer/1.1.13/Algebra.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/nerdamer/1.1.13/Calculus.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/nerdamer/1.1.13/Solve.js"></script>
+    <!-- Nerdamer via JSDelivr (More reliable CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/nerdamer.core.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Algebra.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Calculus.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Solve.js"></script>
 
-    <!-- Font Awesome for Icons -->
+    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
     <style>
-        /* Custom clean font */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
         body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
 <body class="bg-slate-100 min-h-screen flex flex-col items-center justify-center p-4">
 
-    <!-- Main Card -->
     <div class="bg-white rounded-xl shadow-lg w-full max-w-2xl overflow-hidden">
         
         <!-- Header -->
@@ -37,7 +35,7 @@
         <!-- Body -->
         <div class="p-8">
             
-            <!-- Instructions / Examples -->
+            <!-- Instructions -->
             <div class="mb-6 bg-slate-50 border-l-4 border-indigo-500 p-4 text-sm text-slate-600">
                 <p class="font-semibold mb-1">How to format your equation:</p>
                 <ul class="list-disc pl-5 space-y-1">
@@ -82,7 +80,6 @@
                         <i class="fa-regular fa-copy"></i>
                     </button>
                 </div>
-                <p id="fractionDisplay" class="text-sm text-slate-400 mt-1 font-mono"></p>
             </div>
 
             <!-- Error Message -->
@@ -104,7 +101,6 @@
             const inputField = document.getElementById('equationInput');
             const resultContainer = document.getElementById('resultContainer');
             const solutionDisplay = document.getElementById('solutionDisplay');
-            const fractionDisplay = document.getElementById('fractionDisplay');
             const errorContainer = document.getElementById('errorContainer');
             const errorText = document.getElementById('errorText');
 
@@ -112,9 +108,9 @@
             resultContainer.classList.add('hidden');
             errorContainer.classList.add('hidden');
             
+            // Sanitize: remove extra spaces, force lowercase 'x'
             let equation = inputField.value.trim();
 
-            // Basic Input Validation
             if (!equation) {
                 showError("Please enter an equation.");
                 return;
@@ -123,53 +119,54 @@
                 showError("Equation must contain an equals sign (=).");
                 return;
             }
-            if (!equation.toLowerCase().includes('x')) {
+            
+            // Ensure variable is lowercase x
+            if (equation.includes('X')) {
+                equation = equation.replace(/X/g, 'x');
+            }
+            if (!equation.includes('x')) {
                 showError("Equation must contain the variable 'x'.");
                 return;
             }
 
             try {
-                // 1. Solve the equation symbolically using Nerdamer
+                // 1. Solve Symbolically
+                // nerdamer.solve returns a vector string like "[12.5]" or "[3, -3]"
                 const sol = nerdamer.solve(equation, 'x');
+                const solString = sol.toString();
+
+                // 2. Extract content from brackets [ ... ]
+                // This regex pulls the content out of the brackets
+                const match = solString.match(/\[(.*?)\]/);
                 
-                // Nerdamer returns a list of solutions (e.g., quadratic might have two)
-                // For Gas laws, it's almost always linear, so we take the first one.
-                const rawResult = sol.symbol.elements[0]; 
-
-                if (!rawResult) {
-                    showError("No solution found. Check your syntax.");
+                if (!match || !match[1]) {
+                    showError("No valid solution found. Check syntax.");
                     return;
                 }
 
-                // 2. Evaluate to a decimal
-                const decimalValue = Number(nerdamer(rawResult).text('decimals'));
+                // Get the first solution (Gas laws are linear, usually only 1 answer)
+                let rawAnswer = match[1].split(',')[0];
 
-                // 3. Check for valid number
+                // 3. Convert to Decimal
+                // passing 'decimals' to text() forces evaluation
+                const decimalValue = Number(nerdamer(rawAnswer).text('decimals'));
+
                 if (isNaN(decimalValue)) {
-                    showError("The solution resulted in an invalid number.");
+                    showError("Result is not a number.");
                     return;
                 }
 
-                // 4. Display Logic
-                // If it's a whole number, show it. If decimal, show fixed 4.
+                // 4. Formatting
                 const formattedResult = Number.isInteger(decimalValue) 
                     ? decimalValue 
                     : decimalValue.toFixed(4);
 
                 solutionDisplay.innerText = `x = ${formattedResult}`;
-                
-                // Optional: Show exact fraction if it differs significantly
-                if (rawResult.toString() !== formattedResult.toString()) {
-                    // fractionDisplay.innerText = `Exact: ${rawResult.toString()}`;
-                } else {
-                    fractionDisplay.innerText = '';
-                }
-
                 resultContainer.classList.remove('hidden');
 
             } catch (err) {
-                console.error(err);
-                showError("Could not solve. Check for unbalanced parenthesis or extra characters.");
+                console.error("Nerdamer Error:", err);
+                showError("Could not solve. Check for unbalanced parenthesis.");
             }
         }
 
@@ -183,15 +180,15 @@
         function copyToClipboard() {
             const text = document.getElementById('solutionDisplay').innerText;
             navigator.clipboard.writeText(text.replace('x = ', ''));
-            
-            // Visual feedback
             const btn = document.querySelector('.fa-copy');
-            btn.classList.remove('fa-copy');
-            btn.classList.add('fa-check');
-            setTimeout(() => {
-                btn.classList.add('fa-copy');
-                btn.classList.remove('fa-check');
-            }, 1000);
+            if(btn) {
+                btn.classList.remove('fa-copy');
+                btn.classList.add('fa-check');
+                setTimeout(() => {
+                    btn.classList.add('fa-copy');
+                    btn.classList.remove('fa-check');
+                }, 1000);
+            }
         }
     </script>
 </body>
